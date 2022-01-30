@@ -17,33 +17,37 @@ import matplotlib.pyplot as plt
 # 生成标签值：下一天收盘价（涉及删除最后一条数据，不要重复执行该函数）
 def generate_label(data_path):
     df = pd.read_csv(data_path)
-    next_close = list()
-    for i in range(len(df['close']) - 1):
-        next_close.append(df['close'][i + 1])
-    next_close.append(0)
-    df['next_close'] = next_close
-    df.drop(df.index[-1], inplace=True)
-    df.to_csv('temp.csv', index=None)
 
+    for i in ['xa','ya','za','row','pitch','yaw']:
+        next_close = list()
+        for j in range(len(df[i])-1):
+            next_close.append(df[i][j+1])
+        next_close.append(0)
+        df['new'+i] = next_close
+    df.to_csv('new_UVA.csv',index=None)
 
 # 生成训练和测试数据
-def generate_model_data(data_path, alpha, days):
+def generate_model_data(data_path, alpha, seq_len):
     df = pd.read_csv(data_path)
-    train_day = int((len(df['close']) - days + 1))
-    for property in ['open', 'close', 'high', 'low', 'volume', 'next_close']:
+    train_seq = int((len(df) - seq_len + 1))
+    for property in ['xa','ya','za','row','pitch','yaw','newxa','newya','newza','newrow','newpitch','newyaw']:
         df[property] = scaler.fit_transform(np.reshape(np.array(df[property]), (-1, 1)))
+
     X_data, Y_data = list(), list()
     # 生成时序数据
-    for i in range(train_day):
-        Y_data.append(df['next_close'][i + days - 1])
-        for j in range(days):
-            for m in ['open', 'close', 'high', 'low', 'volume']:
+    for i in range(train_seq):
+        for k in ['newxa','newya','newza','newrow','newpitch','newyaw']:
+            Y_data.append(df[k][i + seq_len - 1])
+        for j in range(seq_len):
+            for m in ['xa','ya','za','row','pitch','yaw']:
                 X_data.append(df[m][i + j])
-    X_data = np.reshape(np.array(X_data), (-1, 5 * 15))  # 5表示特征数量*天数
+    X_data = np.reshape(np.array(X_data), (-1, 6 * seq_len))  # 5表示特征数量*天数
     train_length = int(len(Y_data) * alpha)
-    X_train = np.reshape(np.array(X_data[:train_length]), (len(X_data[:train_length]), days, 5))
-    X_test = np.reshape(np.array(X_data[train_length:]), (len(X_data[train_length:]), days, 5))
-    Y_train, Y_test = np.array(Y_data[:train_length]), np.array(Y_data[train_length:])
+    X_train = np.reshape(np.array(X_data[:train_length]), (len(X_data[:train_length]), seq_len, 6))
+    X_test = np.reshape(np.array(X_data[train_length:]), (len(X_data[train_length:]), seq_len, 6))
+    #Y_train, Y_test = np.array(Y_data[:train_length]), np.array(Y_data[train_length:])
+    Y_train = np.reshape(np.array(Y_data[:train_length]),(len(Y_data[:train_length]),  1, 6))
+    Y_test = np.reshape(np.array(Y_data[train_length:]), (len(Y_data[train_length:]), 1, 6))
     return X_train, Y_train, X_test, Y_test
 
 
@@ -91,12 +95,12 @@ def lstm_model(X_train, Y_train, X_test, Y_test):
 
 
 if __name__ == '__main__':
-    data_path = 'stock.csv'
-    days = 15
+    data_path = 'UAV.csv'
+    seq_len = 15
     alpha = 0.8
-    generate_label(data_path)
+    #generate_label(data_path)
     scaler = MinMaxScaler(feature_range=(0, 1))
-    X_train, Y_train, X_test, Y_test = generate_model_data('temp.csv', alpha, days)
+    X_train, Y_train, X_test, Y_test = generate_model_data('new_UAV.csv', alpha, seq_len)
     train_Y, trainPredict, test_Y, testPredict = lstm_model(X_train, Y_train, X_test, Y_test)
 
     RMSE, MAE, MAPE, AMAPE = evaluate(test_Y, testPredict)
@@ -112,6 +116,7 @@ if __name__ == '__main__':
     plt.plot(list(test_Y), color='blue', label='real')
     plt.legend(loc='upper left')
     plt.title('test data')
+    plt.suptitle('units==20,RMSE=\d,MAE=\d,MAPE=\d,AMAPE=\d',RMSE,MAE,MAPE,AMAPE)
     plt.show()
 
 
